@@ -1,36 +1,52 @@
 package main
 
 import (
-	"cloud.google.com/go/pubsub"
-	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 )
 
 func main() {
-	ctx := context.Background()
-	proj := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if proj == "" {
-		fmt.Fprintf(os.Stderr, "GOOGLE_CLOUD_PROJECT environment variable must be set.\n")
-		os.Exit(1)
-	}
-	client, err := pubsub.NewClient(ctx, proj)
-	if err != nil {
-		log.Fatalf("Could not create pubsub Client: %v", err)
+	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/_ah/push-handlers/first-topic", pushHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+		log.Printf("Defaulting to port %s\n", port)
 	}
 
-	message := "hello world"
-	topic := client.Topic("first-topic")
-	topic.
-	result := topic.Publish(ctx, &pubsub.Message{
-		Data: []byte(message),
-	})
-	// Block until the result is returned and a server-generated
-	// ID is returned for the published message.
-	id, err := result.Get(ctx)
-	if err != nil {
-		log.Fatalf("result.Get failed: err = %v", err)
+	log.Printf("Listening on port %s", port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+}
+
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
 	}
-	fmt.Printf("Published a message; msg ID: %v\n", id)
+	fmt.Fprint(w, "Hello, World!")
+}
+
+func pushHandler(w http.ResponseWriter, r *http.Request) {
+	type pushRequest struct {
+		Message struct {
+			Attributes map[string]string
+			Data       []byte
+			ID         string `json:"message_id"`
+		}
+		Subscription string
+	}
+
+	message := &pushRequest{}
+	if err := json.NewDecoder(r.Body).Decode(message); err != nil {
+		log.Printf("Could not decode body: %v\n", err)
+		http.Error(w, fmt.Sprintf("Could not decode body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Data = %v\n", string(message.Message.Data))
+	fmt.Fprint(w, "ok")
 }
