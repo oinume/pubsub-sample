@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,19 +11,26 @@ import (
 )
 
 func main() {
+	if len(os.Args) != 3 {
+		fmt.Fprintf(os.Stderr, "topic and message are require\n")
+		os.Exit(1)
+	}
+
 	ctx := context.Background()
 	proj := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if proj == "" {
 		fmt.Fprintf(os.Stderr, "GOOGLE_CLOUD_PROJECT environment variable must be set.\n")
 		os.Exit(1)
 	}
+
+	topicName := os.Args[1]
+	message := os.Args[2]
 	client, err := pubsub.NewClient(ctx, proj)
 	if err != nil {
 		log.Fatalf("Could not create pubsub Client: %v", err)
 	}
 
-	message := "hello world"
-	topic := client.Topic("first-topic")
+	topic := client.Topic(topicName)
 	result := topic.Publish(ctx, &pubsub.Message{
 		Data: []byte(message),
 	})
